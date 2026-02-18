@@ -53,6 +53,7 @@ export async function POST(req: Request) {
         id: updatedAppointment.id,
         newStatus: updatedAppointment.status,
         patientName: updatedAppointment.patient.name,
+        patientPhone: updatedAppointment.patient.phone,
         date: updatedAppointment.date
       }
     });
