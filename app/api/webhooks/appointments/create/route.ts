@@ -50,6 +50,7 @@ export async function POST(req: Request) {
       success: true,
       data: {
         appointmentId: result.appointment.id,
+        phone: result.patient.phone,
         patientName: result.patient.name,
         date: result.appointment.date,
       },
