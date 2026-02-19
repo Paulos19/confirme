@@ -6,77 +6,83 @@ import { revalidatePath } from "next/cache";
 
 export async function triggerN8nConfirmationsAction(dateSchedule: string) {
   try {
-    // 1. Busca estritamente os pendentes e não notificados para a data selecionada
+    // 1. Busca os pendentes
     const pendingBookings = await prisma.booking.findMany({
       where: {
         dateSchedule: dateSchedule,
         confirmationStatus: "PENDING",
-        n8nNotifiedAt: null, // Regra de Ouro: Idempotência
-      },
-      select: {
-        id: true,
-        patientName: true,
-        patientMobile: true,
-        dateSchedule: true,
-        hourSchedule: true,
-        doctorName: true,
-      },
+        n8nNotifiedAt: null,
+      }
     });
 
     if (pendingBookings.length === 0) {
-      return { success: false, error: "Nenhum agendamento pendente de notificação para esta data." };
+      return { success: false, error: "Nenhum agendamento pendente de notificação." };
     }
 
-    // 2. Formata o payload exatamente como o n8n espera
+    // 2. Busca o Template Salvo no Banco
+    const config = await prisma.config.findUnique({ where: { id: "global" } });
+    const template = config?.messageTemplate || "Você tem uma consulta dia {{date}} às {{time}}.";
+
+    // Função auxiliar de Capitalize (ex: EDUARDO -> Eduardo)
+    const toTitleCase = (str: string) => {
+      return str.toLowerCase().replace(/(?:^|\s)\w/g, match => match.toUpperCase());
+    };
+
+    // 3. Monta o payload substituindo as variáveis AQUI NO NEXT.JS
     const payload = {
-      bookings: pendingBookings.map((b) => ({
-        id: b.id,
-        patientName: b.patientName,
-        patientMobile: b.patientMobile,
-        date: b.dateSchedule,
-        time: b.hourSchedule.substring(0, 5), // Envia apenas HH:mm
-        doctor: b.doctorName,
-      })),
+      bookings: pendingBookings.map((b) => {
+        // Cálculo de datas
+        const [dia, mes, ano] = b.dateSchedule.split('/');
+        const dateObj = new Date(`${ano}-${mes}-${dia}T12:00:00`);
+        const diasDaSemana = ["DOMINGO", "SEGUNDA", "TERÇA", "QUARTA", "QUINTA", "SEXTA", "SÁBADO"];
+        
+        const diaSemanaStr = diasDaSemana[dateObj.getDay()];
+        const dataCurta = `${dia}/${mes}`;
+        const patientNameFmt = toTitleCase(b.patientName);
+        const doctorNameFmt = toTitleCase(b.doctorName);
+        const timeFmt = b.hourSchedule.substring(0, 5);
+
+        // Substituição das tags
+        let finalMessage = template
+          .replace(/{{patientName}}/g, patientNameFmt)
+          .replace(/{{doctor}}/g, doctorNameFmt)
+          .replace(/{{date}}/g, b.dateSchedule)
+          .replace(/{{dataCurta}}/g, dataCurta)
+          .replace(/{{diaSemana}}/g, diaSemanaStr)
+          .replace(/{{time}}/g, timeFmt);
+
+        return {
+          id: b.id,
+          patientMobile: b.patientMobile,
+          customMessage: finalMessage // Enviamos a mensagem 100% pronta!
+        };
+      }),
     };
 
     const { N8N_WEBHOOK_URL, N8N_WEBHOOK_SECRET } = process.env;
 
-    if (!N8N_WEBHOOK_URL || !N8N_WEBHOOK_SECRET) {
-      throw new Error("[CONFIG_ERROR] Variáveis do n8n ausentes no ambiente.");
-    }
-
-    // 3. Dispara para o orquestrador (Assíncrono para o Next.js, síncrono para a requisição)
-    const response = await fetch(N8N_WEBHOOK_URL, {
+    // 4. Dispara para o n8n
+    const response = await fetch(N8N_WEBHOOK_URL!, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": N8N_WEBHOOK_SECRET, // Proteção obrigatória
+        "x-api-key": N8N_WEBHOOK_SECRET!,
       },
       body: JSON.stringify(payload),
     });
 
-    if (!response.ok) {
-      throw new Error(`Falha no n8n: ${response.statusText}`);
-    }
+    if (!response.ok) throw new Error("Falha n8n");
 
-    // 4. Marca os registros como notificados no nosso banco de dados
-    const bookingIds = pendingBookings.map((b) => b.id);
-    
+    // 5. Marca como notificado no banco
     await prisma.booking.updateMany({
-      where: {
-        id: { in: bookingIds },
-      },
-      data: {
-        n8nNotifiedAt: new Date(),
-      },
+      where: { id: { in: pendingBookings.map(b => b.id) } },
+      data: { n8nNotifiedAt: new Date() },
     });
 
-    // 5. Invalida o cache para atualizar a UI
     revalidatePath("/dashboard");
-
     return { success: true, count: pendingBookings.length };
   } catch (error) {
-    console.error("[N8N_TRIGGER_ERROR]", error);
-    return { success: false, error: "Falha ao comunicar com o orquestrador de mensagens." };
+    console.error(error);
+    return { success: false, error: "Falha ao comunicar com orquestrador." };
   }
 }

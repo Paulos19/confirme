@@ -77,3 +77,9 @@ enum ConfirmationStatus {
   CONFIRMED
   CANCELLED
 }
+
+model Config {
+  id              String   @id @default("global") // Singleton (só haverá 1 linha)
+  messageTemplate String   @db.Text
+  updatedAt       DateTime @updatedAt
+}
