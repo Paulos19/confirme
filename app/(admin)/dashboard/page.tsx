@@ -1,207 +1,160 @@
-import { auth, signOut } from "@/auth";
+// app/dashboard/page.tsx
+import { auth, signOut } from "@/auth"; // Ajuste o path se necessário
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Calendar, CheckCircle2, XCircle, Clock } from "lucide-react";
-import { updateAppointmentStatus } from "@/actions/appointments";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Calendar, CheckCircle2, Clock } from "lucide-react";
 
-export default async function Dashboard() {
+import { DashboardFilter } from "@/features/bookings/components/dashboard-filter";
+import { TriggerNotificationsButton } from "@/features/bookings/components/trigger-notifications-button";
+
+// Tipagem correta para searchParams no Next.js 15+ (Promise)
+type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
+
+export default async function Dashboard({ searchParams }: { searchParams: SearchParams }) {
   const session = await auth();
-
   if (!session) redirect("/login");
 
-  // Busca de dados (Data Fetching otimizado)
-  const appointments = await prisma.appointment.findMany({
-    include: { patient: true },
-    orderBy: { date: "desc" },
-    take: 50, // Paginação simples para começar
+  const resolvedParams = await searchParams;
+  
+  // 1. Pega a data da URL (formato do input: YYYY-MM-DD) ou usa hoje
+  const urlStartDateStr = (resolvedParams.start as string) || format(new Date(), "yyyy-MM-dd");
+  
+  // FUNÇÃO HELPER: Converte YYYY-MM-DD para DD/MM/YYYY (formato salvo no Prisma legado)
+  const formatDateToClinicLegado = (dateStr: string) => {
+    try {
+      const [year, month, day] = dateStr.split('-');
+      return `${day}/${month}/${year}`;
+    } catch (e) {
+      return dateStr; 
+    }
+  };
+
+  // 2. Converte a data da URL para o formato exato que a API salvou no banco
+  const clinicStartDate = formatDateToClinicLegado(urlStartDateStr);
+
+  // 3. Busca no banco de dados.
+  const appointments = await prisma.booking.findMany({
+    where: {
+      dateSchedule: {
+        equals: clinicStartDate
+      }
+    },
+    orderBy: [{ hourSchedule: "asc" }], 
   });
 
-  // Cálculo rápido de KPIs
-  const totalToday = appointments.filter(
-    (a) => new Date(a.date).toDateString() === new Date().toDateString()
-  ).length;
-  const pending = appointments.filter((a) => a.status === "PENDING").length;
-  const confirmed = appointments.filter((a) => a.status === "CONFIRMED").length;
+  // 4. Cálculo de KPIs baseados na modelagem 'Booking' plana
+  const totalToday = appointments.length;
+  // Pendentes são aqueles que não confirmaram e não cancelaram, independentemente de já terem sido notificados no n8n.
+  const pending = appointments.filter((a) => a.confirmationStatus === "PENDING").length;
+  const confirmed = appointments.filter((a) => a.confirmationStatus === "CONFIRMED").length;
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-muted/40">
       <div className="flex flex-col sm:gap-4 sm:py-4 sm:pl-14">
         <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
           <h1 className="text-2xl font-semibold">Dashboard Clínica</h1>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-4">
+            
+            {/* O Componente Client injetado aqui cuida do filtro de datas e sync com API legada */}
+            <DashboardFilter />
+            
+            <div className="h-6 w-px bg-border hidden md:block" />
+            
             <span className="text-sm text-muted-foreground hidden md:inline">
               {session.user?.email}
             </span>
-            <form
-              action={async () => {
-                "use server";
-                await signOut();
-              }}
-            >
-              <Button size="sm" variant="outline">
-                Sair
-              </Button>
+            <form action={async () => { "use server"; await signOut(); }}>
+              <Button size="sm" variant="outline">Sair</Button>
             </form>
           </div>
         </header>
 
         <main className="grid flex-1 items-start gap-4 p-4 sm:px-6 sm:py-0 md:gap-8">
+          
+          {/* Action Bar Estratégica: Cabeçalho com o botão de disparo em destaque */}
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-medium tracking-tight">Visão Geral do Dia</h2>
+            
+            {/* Componente que dispara o webhook para o n8n */}
+            <TriggerNotificationsButton 
+              date={clinicStartDate} 
+              pendingCount={pending} 
+            />
+          </div>
+
           {/* KPIs Cards */}
           <div className="grid gap-4 md:grid-cols-3 md:gap-8">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  Agendamentos Hoje
-                </CardTitle>
+                <CardTitle className="text-sm font-medium">Agendamentos no Dia</CardTitle>
                 <Calendar className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{totalToday}</div>
-              </CardContent>
+              <CardContent><div className="text-2xl font-bold">{totalToday}</div></CardContent>
             </Card>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  Pendentes Confirmação
-                </CardTitle>
+                <CardTitle className="text-sm font-medium">Aguardando Resposta</CardTitle>
                 <Clock className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{pending}</div>
-              </CardContent>
+              <CardContent><div className="text-2xl font-bold">{pending}</div></CardContent>
             </Card>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  Confirmados
-                </CardTitle>
+                <CardTitle className="text-sm font-medium">Confirmados no App</CardTitle>
                 <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{confirmed}</div>
-              </CardContent>
+              <CardContent><div className="text-2xl font-bold">{confirmed}</div></CardContent>
             </Card>
           </div>
 
-          {/* Tabela de Agendamentos */}
-          <Card x-chunk="dashboard-06-chunk-0">
+          {/* Tabela de Dados */}
+          <Card>
             <CardHeader>
-              <CardTitle>Agendamentos Recentes</CardTitle>
-              <CardDescription>
-                Gerencie os status e veja as respostas do WhatsApp em tempo real.
-              </CardDescription>
+              <CardTitle>Agendamentos</CardTitle>
+              <CardDescription>Visualizando agenda do dia {clinicStartDate}</CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Paciente</TableHead>
-                    <TableHead className="hidden md:table-cell">Status</TableHead>
-                    <TableHead className="hidden md:table-cell">Data/Hora</TableHead>
-                    <TableHead className="hidden md:table-cell">Notas</TableHead>
-                    <TableHead>
-                      <span className="sr-only">Ações</span>
-                    </TableHead>
+                    <TableHead>Contato</TableHead>
+                    <TableHead>Data/Hora</TableHead>
+                    <TableHead>Status Automação</TableHead>
+                    <TableHead>Status Clínica</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
+                  {appointments.length === 0 && (
+                     <TableRow>
+                       <TableCell colSpan={5} className="text-center h-24 text-muted-foreground">
+                         Nenhum agendamento encontrado no período.
+                       </TableCell>
+                     </TableRow>
+                  )}
                   {appointments.map((apt) => (
                     <TableRow key={apt.id}>
-                      <TableCell className="font-medium">
-                        <div className="font-medium">{apt.patient.name}</div>
-                        <div className="text-sm text-muted-foreground md:hidden">
-                          {format(new Date(apt.date), "dd/MM HH:mm")}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {apt.patient.phone}
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        <Badge
-                          variant={
-                            apt.status === "CONFIRMED"
-                              ? "default"
-                              : apt.status === "CANCELED"
-                              ? "destructive"
-                              : "secondary"
-                          }
-                        >
-                          {apt.status === "PENDING" && "Pendente"}
-                          {apt.status === "CONFIRMED" && "Confirmado"}
-                          {apt.status === "CANCELED" && "Cancelado"}
-                          {apt.status === "RESCHEDULED" && "Reagendado"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        {format(new Date(apt.date), "PPP 'às' HH:mm", {
-                          locale: ptBR,
-                        })}
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell text-muted-foreground text-sm">
-                        {apt.notes || "-"}
+                      <TableCell className="font-medium">{apt.patientName}</TableCell>
+                      <TableCell className="text-muted-foreground">{apt.patientMobile}</TableCell>
+                      <TableCell>
+                         {apt.dateSchedule} às {apt.hourSchedule.substring(0, 5)}
                       </TableCell>
                       <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              aria-haspopup="true"
-                              size="icon"
-                              variant="ghost"
-                            >
-                              <MoreHorizontal className="h-4 w-4" />
-                              <span className="sr-only">Menu</span>
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Ações</DropdownMenuLabel>
-                            
-                            {/* Formulários para Actions (Funciona sem JS no client se precisar) */}
-                            <form action={updateAppointmentStatus}>
-                              <input type="hidden" name="id" value={apt.id} />
-                              <input type="hidden" name="status" value="CONFIRMED" />
-                              <button className="w-full text-left">
-                                <DropdownMenuItem>Confirmar Manualmente</DropdownMenuItem>
-                              </button>
-                            </form>
-
-                            <form action={updateAppointmentStatus}>
-                              <input type="hidden" name="id" value={apt.id} />
-                              <input type="hidden" name="status" value="CANCELED" />
-                              <button className="w-full text-left">
-                                <DropdownMenuItem className="text-red-600">
-                                  Cancelar Agendamento
-                                </DropdownMenuItem>
-                              </button>
-                            </form>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        <Badge variant={
+                          apt.confirmationStatus === "CONFIRMED" ? "default" : 
+                          apt.confirmationStatus === "CANCELLED" ? "destructive" : "secondary"
+                        }>
+                          {apt.confirmationStatus}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-xs text-muted-foreground uppercase">{apt.status}</span>
                       </TableCell>
                     </TableRow>
                   ))}

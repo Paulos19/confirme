@@ -51,3 +51,29 @@ model Appointment {
 
   @@index([date])
 }
+
+model Booking {
+  id              String   @id @default(cuid())
+  externalId      Int      @unique // ID vindo da API do Clinic
+  patientName     String
+  patientMobile   String
+  doctorName      String
+  dateSchedule    String   // Ex: "19/02/2026"
+  hourSchedule    String   // Ex: "08:00:00:000"
+  status          String   // Status original da clínica
+  
+  // Controle do nosso sistema
+  confirmationStatus ConfirmationStatus @default(PENDING)
+  n8nNotifiedAt      DateTime?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([dateSchedule])
+}
+
+enum ConfirmationStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+}
