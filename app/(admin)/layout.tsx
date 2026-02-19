@@ -13,18 +13,19 @@ export default async function AdminLayout({
   if (!session) redirect("/login");
 
   return (
-    <div className="flex min-h-screen w-full bg-muted/30">
-      {/* Sidebar Fixa (Desktop) */}
+    <div className="flex h-screen w-full bg-slate-50 overflow-hidden font-sans">
+      {/* Sidebar Retrátil */}
       <Sidebar />
       
       {/* Container Principal */}
-      <div className="flex flex-col w-full transition-all sm:pl-14 lg:pl-64">
-        {/* Header Dinâmico */}
+      <div className="flex flex-col flex-1 overflow-hidden transition-all duration-300">
         <Header userEmail={session.user?.email} />
         
-        {/* Conteúdo da Página */}
-        <main className="flex-1 items-start p-4 sm:px-6 sm:py-6 md:gap-8">
-          {children}
+        {/* Conteúdo da Página com Scroll Isolado */}
+        <main className="flex-1 overflow-y-auto p-4 md:p-8">
+          <div className="mx-auto max-w-7xl">
+            {children}
+          </div>
         </main>
       </div>
     </div>

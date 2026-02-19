@@ -43,7 +43,7 @@ export function TriggerNotificationsButton({ date, pendingCount }: TriggerNotifi
         ) : (
           <Send className="mr-2 h-4 w-4" />
         )}
-        Disparar Confirmações ({pendingCount})
+        Disparar ({pendingCount})
       </Button>
       
       {feedback && (

@@ -6,8 +6,16 @@ import { format } from "date-fns";
 
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { CalendarDays, CheckCircle2, Clock, Send, Users } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { 
+  CheckCircle2, 
+  Clock, 
+  Send, 
+  Users, 
+  Phone, 
+  Stethoscope, 
+  Building2 
+} from "lucide-react";
 
 import { DashboardFilter } from "@/features/bookings/components/dashboard-filter";
 import { LocalDateFilter } from "@/features/bookings/components/local-date-filter";
@@ -33,7 +41,6 @@ export default async function DashboardOverviewPage({ searchParams }: { searchPa
 
   const clinicStartDate = formatDateToClinicLegado(urlStartDateStr);
 
-  // Busca TODOS os agendamentos sincronizados para este dia
   const appointments = await prisma.booking.findMany({
     where: { dateSchedule: { equals: clinicStartDate } },
     orderBy: [{ hourSchedule: "asc" }], 
@@ -41,132 +48,167 @@ export default async function DashboardOverviewPage({ searchParams }: { searchPa
 
   const totalToday = appointments.length;
   const pending = appointments.filter((a) => a.confirmationStatus === "PENDING").length;
-  // Conta quantos já receberam a mensagem via n8n
   const notifiedCount = appointments.filter((a) => a.n8nNotifiedAt !== null).length;
 
   return (
-    <div className="flex flex-col gap-8">
-      {/* Action Bar Superior */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 bg-card p-4 rounded-xl border shadow-sm">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Centro de Operações</h2>
-          <p className="text-muted-foreground text-sm mt-1">
-            Controlo de disparos e estado de notificações.
+    <div className="flex flex-col gap-8 pb-10">
+      
+      {/* 1. Header da Página & Barra de Ferramentas */}
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6">
+        <div className="space-y-1">
+          <h2 className="text-3xl font-extrabold tracking-tight text-slate-900">Visão Geral</h2>
+          <p className="text-slate-500 font-medium">
+            Métricas e disparos para o dia <strong className="text-slate-700">{clinicStartDate}</strong>
           </p>
         </div>
         
-        <div className="flex flex-col sm:flex-row items-end gap-4">
-          <LocalDateFilter />
-          <div className="h-10 w-px bg-border hidden sm:block mx-2" />
-          
-          <div className="flex flex-col gap-1.5 items-end">
-            <span className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Acções da API</span>
-            <div className="flex gap-2">
-              {/* Mantém o Sync para ir buscar novos à clínica se necessário */}
-              <DashboardFilter />
-              <TriggerNotificationsButton date={clinicStartDate} pendingCount={pending} />
-            </div>
+        {/* Painel de Comando Flutuante */}
+        <div className="flex flex-col sm:flex-row items-center gap-4 bg-white p-2 sm:pr-2 sm:pl-4 rounded-2xl border border-slate-200 shadow-sm">
+          <div className="w-full sm:w-auto">
+            <LocalDateFilter />
+          </div>
+          <div className="h-10 w-px bg-slate-200 hidden sm:block mx-1" />
+          <div className="flex gap-2 w-full sm:w-auto">
+            <DashboardFilter />
+            <TriggerNotificationsButton date={clinicStartDate} pendingCount={pending} />
           </div>
         </div>
       </div>
 
-      {/* KPIs Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card className="shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Sincronizados Hoje</CardTitle>
-            <Users className="h-4 w-4 text-blue-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{totalToday}</div>
+      {/* 2. KPIs com Design Minimalista Apple/Linear */}
+      <div className="grid gap-5 sm:grid-cols-3">
+        {/* Card 1 */}
+        <Card className="border-0 shadow-sm ring-1 ring-slate-100 bg-white overflow-hidden group">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Total de Pacientes</p>
+                <div className="text-4xl font-black text-slate-800">{totalToday}</div>
+              </div>
+              <div className="bg-blue-50 p-4 rounded-2xl group-hover:scale-110 transition-transform">
+                <Users className="h-6 w-6 text-blue-600" />
+              </div>
+            </div>
           </CardContent>
         </Card>
         
-        <Card className="shadow-sm border-l-4 border-l-purple-500">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Já Notificados (n8n)</CardTitle>
-            <Send className="h-4 w-4 text-purple-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{notifiedCount}</div>
-            <p className="text-xs text-muted-foreground mt-1">mensagens enviadas</p>
+        {/* Card 2 */}
+        <Card className="border-0 shadow-sm ring-1 ring-slate-100 bg-white overflow-hidden group">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Disparos (n8n)</p>
+                <div className="text-4xl font-black text-slate-800">{notifiedCount}</div>
+              </div>
+              <div className="bg-purple-50 p-4 rounded-2xl group-hover:scale-110 transition-transform">
+                <Send className="h-6 w-6 text-purple-600" />
+              </div>
+            </div>
           </CardContent>
         </Card>
 
-        <Card className="shadow-sm border-l-4 border-l-yellow-400">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Aguardam Resposta</CardTitle>
-            <Clock className="h-4 w-4 text-yellow-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{pending}</div>
-            <p className="text-xs text-muted-foreground mt-1">pendentes de confirmação</p>
+        {/* Card 3 */}
+        <Card className="border-0 shadow-sm ring-1 ring-amber-100 bg-amber-50/30 overflow-hidden group">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-amber-600 uppercase tracking-wider">Aguardam Confirmação</p>
+                <div className="text-4xl font-black text-amber-900">{pending}</div>
+              </div>
+              <div className="bg-amber-100 p-4 rounded-2xl group-hover:scale-110 transition-transform">
+                <Clock className="h-6 w-6 text-amber-600" />
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Tabela de Operações */}
-      <Card className="shadow-sm">
-        <CardHeader className="bg-muted/30 border-b">
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <CalendarDays className="h-5 w-5 text-muted-foreground" />
-            Visão Geral de Sincronização ({clinicStartDate})
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader className="bg-muted/10">
-              <TableRow>
-                <TableHead className="w-[100px] text-center">Horário</TableHead>
-                <TableHead>Paciente</TableHead>
-                <TableHead>Disparo Whatsapp</TableHead>
-                <TableHead>Estado Automação</TableHead>
+      {/* 3. Tabela de Dados (Sem bordas pesadas, design fluido) */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <Table className="w-full">
+            <TableHeader className="bg-slate-50/80 border-b border-slate-100">
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="w-[100px] text-center font-bold text-slate-600 uppercase tracking-wider text-xs py-4">
+                  Hora
+                </TableHead>
+                <TableHead className="font-bold text-slate-600 uppercase tracking-wider text-xs py-4">
+                  Informação do Paciente
+                </TableHead>
+                <TableHead className="text-right pr-8 font-bold text-slate-600 uppercase tracking-wider text-xs py-4">
+                  Estado Atual
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {appointments.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center h-32 text-muted-foreground">
-                    Sem dados locais para esta data. Utilize o botão "Sincronizar" acima.
+                  <TableCell colSpan={3} className="text-center h-40 text-slate-400 font-medium">
+                    Nenhum agendamento registado para esta data.
                   </TableCell>
                 </TableRow>
               )}
-              {appointments.map((apt) => (
-                <TableRow key={apt.id} className="hover:bg-muted/50 transition-colors">
-                  <TableCell className="text-center font-semibold text-primary">
-                    {apt.hourSchedule.substring(0, 5)}
-                  </TableCell>
-                  <TableCell>
-                    <div className="font-medium">{apt.patientName}</div>
-                    <div className="text-xs text-muted-foreground">{apt.patientMobile}</div>
-                  </TableCell>
-                  <TableCell>
-                    {apt.n8nNotifiedAt ? (
-                      <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
-                        Enviado às {format(new Date(apt.n8nNotifiedAt), "HH:mm")}
-                      </Badge>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">Não notificado</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Badge 
-                      variant="outline"
-                      className={`
-                        ${apt.confirmationStatus === "CONFIRMED" ? "border-green-500 text-green-600 bg-green-50" : ""}
-                        ${apt.confirmationStatus === "CANCELLED" ? "border-red-500 text-red-600 bg-red-50" : ""}
-                        ${apt.confirmationStatus === "PENDING" ? "border-yellow-400 text-yellow-700 bg-yellow-50" : ""}
-                      `}
-                    >
-                      {apt.confirmationStatus}
-                    </Badge>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {appointments.map((apt) => {
+                const formattedPhone = apt.patientMobile.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+                
+                return (
+                  <TableRow key={apt.id} className="hover:bg-slate-50/80 transition-colors border-slate-100">
+                    
+                    {/* HORA */}
+                    <TableCell className="text-center align-middle">
+                      <span className="inline-flex items-center justify-center bg-slate-100 text-slate-800 font-bold px-3 py-1.5 rounded-lg text-sm">
+                        {apt.hourSchedule.substring(0, 5)}
+                      </span>
+                    </TableCell>
+
+                    {/* PACIENTE */}
+                    <TableCell className="py-4">
+                      <div className="font-bold text-slate-800 text-base mb-1.5">
+                        {apt.patientName}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-slate-500 font-medium">
+                        <span className="flex items-center gap-1.5 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-100">
+                          <Phone className="w-3.5 h-3.5 text-slate-400" /> 
+                          {formattedPhone}
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <Stethoscope className="w-4 h-4 text-blue-400" /> 
+                          Dr(a). {apt.doctorName}
+                        </span>
+                      </div>
+                    </TableCell>
+
+                    {/* ESTADO */}
+                    <TableCell className="text-right pr-8 align-middle">
+                      <div className="flex flex-col items-end gap-2.5">
+                        <Badge 
+                          variant="outline"
+                          className={`
+                            px-3 py-1 text-xs font-bold border-0 shadow-sm
+                            ${apt.confirmationStatus === "CONFIRMED" ? "bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200" : ""}
+                            ${apt.confirmationStatus === "CANCELLED" ? "bg-rose-100 text-rose-800 ring-1 ring-rose-200" : ""}
+                            ${apt.confirmationStatus === "PENDING" ? "bg-amber-100 text-amber-800 ring-1 ring-amber-200" : ""}
+                          `}
+                        >
+                          {apt.confirmationStatus === "CONFIRMED" && "✓ CONFIRMADO"}
+                          {apt.confirmationStatus === "CANCELLED" && "✕ CANCELADO"}
+                          {apt.confirmationStatus === "PENDING" && "⌛ PENDENTE"}
+                        </Badge>
+                        
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-widest">
+                          <Building2 className="w-3.5 h-3.5" />
+                          {apt.status}
+                        </div>
+                      </div>
+                    </TableCell>
+
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }
