@@ -49,6 +49,9 @@ export default async function DashboardOverviewPage({ searchParams }: { searchPa
   const totalToday = appointments.length;
   const pending = appointments.filter((a) => a.confirmationStatus === "PENDING").length;
   const notifiedCount = appointments.filter((a) => a.n8nNotifiedAt !== null).length;
+  
+  // NOVA REGRA DE NEGÓCIO: Quem pode receber mensagem? Todos, exceto os CANCELADOS.
+  const eligibleToNotify = appointments.filter((a) => a.confirmationStatus !== "CANCELLED").length;
 
   return (
     <div className="flex flex-col gap-8 pb-10">
@@ -70,7 +73,8 @@ export default async function DashboardOverviewPage({ searchParams }: { searchPa
           <div className="h-10 w-px bg-slate-200 hidden sm:block mx-1" />
           <div className="flex gap-2 w-full sm:w-auto">
             <DashboardFilter />
-            <TriggerNotificationsButton date={clinicStartDate} pendingCount={pending} />
+            {/* ATUALIZADO: Passamos a quantidade de elegíveis para o botão não ficar bloqueado */}
+            <TriggerNotificationsButton date={clinicStartDate} pendingCount={eligibleToNotify} />
           </div>
         </div>
       </div>
