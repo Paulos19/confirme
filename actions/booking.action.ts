@@ -2,7 +2,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { fetchClinicBookings } from "@/services/clinic.service";
+import { cancelClinicBooking, fetchClinicBookings } from "@/services/clinic.service";
 import { revalidatePath } from "next/cache";
 
 export async function syncClinicBookingsAction(startDate: string, endDate: string) {
@@ -38,5 +38,44 @@ export async function syncClinicBookingsAction(startDate: string, endDate: strin
   } catch (error) {
     console.error("[SYNC_ERROR]", error);
     return { success: false, error: "Falha ao sincronizar com o Clinic." };
+  }
+}
+
+export async function updateBookingStatusAction(
+  bookingId: string, 
+  newStatus: "CONFIRMED" | "CANCELLED" | "PENDING"
+) {
+  try {
+    const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
+    
+    if (!booking) {
+      return { success: false, error: "Agendamento não encontrado." };
+    }
+
+    // Regra de Negócio: Se o administrador mudar para CANCELADO manualmente, 
+    // precisamos libertar a vaga na API legada da Clínica.
+    if (newStatus === "CANCELLED" && booking.confirmationStatus !== "CANCELLED") {
+      try {
+        await cancelClinicBooking(booking.externalId);
+      } catch (error) {
+        console.error("[MANUAL_CANCEL_CLINIC_ERROR]", error);
+        return { success: false, error: "Erro ao tentar cancelar a vaga no sistema da clínica." };
+      }
+    }
+
+    // Atualiza o nosso banco local
+    await prisma.booking.update({
+      where: { id: bookingId },
+      data: { confirmationStatus: newStatus }
+    });
+
+    // Revalida a interface
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/agendamentos");
+    
+    return { success: true };
+  } catch (error) {
+    console.error("[UPDATE_STATUS_ERROR]", error);
+    return { success: false, error: "Falha interna ao atualizar o status." };
   }
 }

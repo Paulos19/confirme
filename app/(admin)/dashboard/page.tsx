@@ -4,7 +4,6 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { format } from "date-fns";
 
-import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
 import { 
@@ -20,6 +19,7 @@ import {
 import { DashboardFilter } from "@/features/bookings/components/dashboard-filter";
 import { LocalDateFilter } from "@/features/bookings/components/local-date-filter";
 import { TriggerNotificationsButton } from "@/features/bookings/components/trigger-notifications-button";
+import { StatusActionDropdown } from "@/features/bookings/components/status-action-dropdown";
 
 type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
 
@@ -49,8 +49,6 @@ export default async function DashboardOverviewPage({ searchParams }: { searchPa
   const totalToday = appointments.length;
   const pending = appointments.filter((a) => a.confirmationStatus === "PENDING").length;
   const notifiedCount = appointments.filter((a) => a.n8nNotifiedAt !== null).length;
-  
-  // NOVA REGRA DE NEGÓCIO: Quem pode receber mensagem? Todos, exceto os CANCELADOS.
   const eligibleToNotify = appointments.filter((a) => a.confirmationStatus !== "CANCELLED").length;
 
   return (
@@ -65,7 +63,6 @@ export default async function DashboardOverviewPage({ searchParams }: { searchPa
           </p>
         </div>
         
-        {/* Painel de Comando Flutuante */}
         <div className="flex flex-col sm:flex-row items-center gap-4 bg-white p-2 sm:pr-2 sm:pl-4 rounded-2xl border border-slate-200 shadow-sm">
           <div className="w-full sm:w-auto">
             <LocalDateFilter />
@@ -73,15 +70,13 @@ export default async function DashboardOverviewPage({ searchParams }: { searchPa
           <div className="h-10 w-px bg-slate-200 hidden sm:block mx-1" />
           <div className="flex gap-2 w-full sm:w-auto">
             <DashboardFilter />
-            {/* ATUALIZADO: Passamos a quantidade de elegíveis para o botão não ficar bloqueado */}
             <TriggerNotificationsButton date={clinicStartDate} pendingCount={eligibleToNotify} />
           </div>
         </div>
       </div>
 
-      {/* 2. KPIs com Design Minimalista Apple/Linear */}
+      {/* 2. KPIs com Design Minimalista */}
       <div className="grid gap-5 sm:grid-cols-3">
-        {/* Card 1 */}
         <Card className="border-0 shadow-sm ring-1 ring-slate-100 bg-white overflow-hidden group">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -96,7 +91,6 @@ export default async function DashboardOverviewPage({ searchParams }: { searchPa
           </CardContent>
         </Card>
         
-        {/* Card 2 */}
         <Card className="border-0 shadow-sm ring-1 ring-slate-100 bg-white overflow-hidden group">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -111,7 +105,6 @@ export default async function DashboardOverviewPage({ searchParams }: { searchPa
           </CardContent>
         </Card>
 
-        {/* Card 3 */}
         <Card className="border-0 shadow-sm ring-1 ring-amber-100 bg-amber-50/30 overflow-hidden group">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -127,7 +120,7 @@ export default async function DashboardOverviewPage({ searchParams }: { searchPa
         </Card>
       </div>
 
-      {/* 3. Tabela de Dados (Sem bordas pesadas, design fluido) */}
+      {/* 3. Tabela de Dados */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <Table className="w-full">
@@ -158,14 +151,12 @@ export default async function DashboardOverviewPage({ searchParams }: { searchPa
                 return (
                   <TableRow key={apt.id} className="hover:bg-slate-50/80 transition-colors border-slate-100">
                     
-                    {/* HORA */}
                     <TableCell className="text-center align-middle">
                       <span className="inline-flex items-center justify-center bg-slate-100 text-slate-800 font-bold px-3 py-1.5 rounded-lg text-sm">
                         {apt.hourSchedule.substring(0, 5)}
                       </span>
                     </TableCell>
 
-                    {/* PACIENTE */}
                     <TableCell className="py-4">
                       <div className="font-bold text-slate-800 text-base mb-1.5">
                         {apt.patientName}
@@ -182,22 +173,11 @@ export default async function DashboardOverviewPage({ searchParams }: { searchPa
                       </div>
                     </TableCell>
 
-                    {/* ESTADO */}
                     <TableCell className="text-right pr-8 align-middle">
                       <div className="flex flex-col items-end gap-2.5">
-                        <Badge 
-                          variant="outline"
-                          className={`
-                            px-3 py-1 text-xs font-bold border-0 shadow-sm
-                            ${apt.confirmationStatus === "CONFIRMED" ? "bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200" : ""}
-                            ${apt.confirmationStatus === "CANCELLED" ? "bg-rose-100 text-rose-800 ring-1 ring-rose-200" : ""}
-                            ${apt.confirmationStatus === "PENDING" ? "bg-amber-100 text-amber-800 ring-1 ring-amber-200" : ""}
-                          `}
-                        >
-                          {apt.confirmationStatus === "CONFIRMED" && "✓ CONFIRMADO"}
-                          {apt.confirmationStatus === "CANCELLED" && "✕ CANCELADO"}
-                          {apt.confirmationStatus === "PENDING" && "⌛ PENDENTE"}
-                        </Badge>
+                        
+                        {/* INJETÁMOS O COMPONENTE INTERATIVO AQUI */}
+                        <StatusActionDropdown bookingId={apt.id} currentStatus={apt.confirmationStatus} />
                         
                         <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase tracking-widest">
                           <Building2 className="w-3.5 h-3.5" />

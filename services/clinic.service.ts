@@ -59,3 +59,42 @@ export async function fetchClinicBookings(startDate: string, endDate: string) {
     throw new Error("Falha na validação de contrato (Zod). Verifique os logs do servidor.");
   }
 }
+
+// NOVA FUNÇÃO: Cancela o agendamento na API da Clínica
+export async function cancelClinicBooking(bookingId: number) {
+  const {
+    CLINIC_API_URL,
+    CLINIC_FACILITY_ID,
+    CLINIC_DOCTOR_ID,
+    CLINIC_ADDRESS_ID,
+  } = process.env;
+
+  if (!CLINIC_API_URL || !CLINIC_FACILITY_ID || !CLINIC_DOCTOR_ID) {
+    throw new Error("[CONFIG_ERROR] Variáveis de ambiente da Clinic API ausentes.");
+  }
+
+  // Usamos a mesma arquitetura de cache de token
+  const accessToken = await getClinicAccessToken();
+
+  // Rota de cancelamento com base na documentação da Clinic Legacy
+  const url = `${CLINIC_API_URL}/api/v1/integration/facilities/${CLINIC_FACILITY_ID}/doctors/${CLINIC_DOCTOR_ID}/addresses/${CLINIC_ADDRESS_ID ?? "1"}/bookings/${bookingId}?external_id=1`;
+
+  console.log(`[CLINIC_API] Solicitando cancelamento para o agendamento externo: ${bookingId}`);
+
+  const response = await fetch(url, {
+    method: "DELETE", // Se a API retornar erro 405 Method Not Allowed, altere aqui para "POST" conforme o cURL de exemplo da documentação deles.
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${accessToken}`, 
+    },
+    cache: "no-store"
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("[CLINIC_API_CANCEL_ERROR]", response.status, errorText);
+    throw new Error(`Clinic API Cancel Error: ${response.status}`);
+  }
+
+  return true;
+}
