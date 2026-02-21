@@ -7,7 +7,7 @@ import { format } from "date-fns";
 import { syncClinicBookingsAction } from "@/actions/booking.action";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, RefreshCw } from "lucide-react";
+import { Loader2, CloudDownload } from "lucide-react";
 
 export function DashboardFilter() {
   const router = useRouter();
@@ -15,8 +15,6 @@ export function DashboardFilter() {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  // Default para hoje caso não tenha params na URL. 
-  // O input type="date" sempre trabalha com YYYY-MM-DD
   const defaultDate = format(new Date(), "yyyy-MM-dd");
   const [startDate, setStartDate] = useState(searchParams.get("start") || defaultDate);
   const [endDate, setEndDate] = useState(searchParams.get("end") || defaultDate);
@@ -24,56 +22,51 @@ export function DashboardFilter() {
   const handleSyncAndFilter = () => {
     setError(null);
     startTransition(async () => {
-      // 1. Chama a Action enviando no formato YYYY-MM-DD (que a API do Clinic espera na URL)
       const result = await syncClinicBookingsAction(startDate, endDate);
-      
       if (result.success) {
-        // 2. Atualiza a URL do navegador
         const params = new URLSearchParams(window.location.search);
         params.set("start", startDate);
         params.set("end", endDate);
-        
-        // 3. O router.push faz o Next.js re-renderizar o Server Component (page.tsx)
         router.push(`?${params.toString()}`);
         router.refresh();
       } else {
-        // CORREÇÃO: Fallback garantindo que nunca passaremos undefined para o estado
-        setError(result.error ?? "Erro desconhecido ao sincronizar.");
+        setError(result.error ?? "Erro ao sincronizar.");
       }
     });
   };
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-end gap-4">
-        <div className="space-y-1">
-          <label className="text-xs text-muted-foreground font-medium">Data Inicial</label>
+    <div className="flex flex-col w-full gap-1">
+      <div className="flex flex-col xl:flex-row items-center gap-1.5 p-1 bg-slate-50/80 rounded-xl border border-slate-200/60 shadow-inner w-full">
+        
+        <div className="flex w-full xl:w-auto items-center gap-1">
           <Input 
             type="date" 
             value={startDate} 
             onChange={(e) => setStartDate(e.target.value)} 
-            className="w-auto"
+            className="flex-1 h-8 border-transparent bg-white shadow-sm focus:ring-2 focus:ring-primary/20 rounded-lg text-xs font-medium text-slate-600"
           />
-        </div>
-        <div className="space-y-1">
-          <label className="text-xs text-muted-foreground font-medium">Data Final</label>
+          <span className="text-slate-400 text-xs font-medium px-1">a</span>
           <Input 
             type="date" 
             value={endDate} 
             onChange={(e) => setEndDate(e.target.value)} 
-            className="w-auto"
+            className="flex-1 h-8 border-transparent bg-white shadow-sm focus:ring-2 focus:ring-primary/20 rounded-lg text-xs font-medium text-slate-600"
           />
         </div>
-        <Button onClick={handleSyncAndFilter} disabled={isPending}>
-          {isPending ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <RefreshCw className="mr-2 h-4 w-4" />
-          )}
-          Buscar e Sincronizar
+        
+        <Button 
+          onClick={handleSyncAndFilter} 
+          disabled={isPending}
+          variant="secondary"
+          className="w-full xl:w-auto h-8 rounded-lg px-3 bg-white hover:bg-slate-100 text-slate-700 shadow-sm border border-slate-200 transition-all text-xs font-semibold"
+        >
+          {isPending ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin text-primary" /> : <CloudDownload className="mr-1.5 h-3.5 w-3.5 text-primary" />}
+          Sincronizar Clínica
         </Button>
       </div>
-      {error && <span className="text-sm text-destructive font-medium">{error}</span>}
+      
+      {error && <span className="text-[10px] text-rose-500 font-medium px-2">{error}</span>}
     </div>
   );
 }

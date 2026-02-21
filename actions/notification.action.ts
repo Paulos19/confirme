@@ -6,9 +6,9 @@ import { revalidatePath } from "next/cache";
 
 export async function triggerN8nConfirmationsAction(dateSchedule: string) {
   try {
-    // 1. NOVA REGRA DE NEGÓCIO: Busca os alvos válidos.
-    // Removemos o bloqueio "n8nNotifiedAt: null" para permitir múltiplos disparos.
-    // Adicionamos a barreira Absoluta: NUNCA enviar para "CANCELLED".
+    // 1. REGRA DE NEGÓCIO: Busca os alvos válidos.
+    // Permite múltiplos disparos (n8nNotifiedAt não é restritivo).
+    // Barreira Absoluta: NUNCA enviar para "CANCELLED".
     const targetBookings = await prisma.booking.findMany({
       where: {
         dateSchedule: dateSchedule,
@@ -22,15 +22,20 @@ export async function triggerN8nConfirmationsAction(dateSchedule: string) {
       return { success: false, error: "Nenhum paciente elegível para notificação nesta data." };
     }
 
-    // 2. Busca o Template Salvo no Banco
-    const config = await prisma.config.findUnique({ where: { id: "global" } });
-    const template = config?.messageTemplate || "Você tem uma consulta dia {{date}} às {{time}}.";
+    // 2. Busca o Template ATIVO no Banco (NOVA ESTRUTURA DE TEMPLATES)
+    const activeTemplate = await prisma.messageTemplate.findFirst({ 
+      where: { isActive: true } 
+    });
+    
+    // Fallback de segurança caso o admin tenha apagado tudo ou não ativado nenhum
+    const templateContent = activeTemplate?.content || "Você tem uma consulta dia {{date}} às {{time}}.";
 
+    // Função auxiliar para capitalizar nomes (ex: JOAO -> Joao)
     const toTitleCase = (str: string) => {
       return str.toLowerCase().replace(/(?:^|\s)\w/g, match => match.toUpperCase());
     };
 
-    // 3. Monta o payload substituindo as variáveis para os alvos válidos
+    // 3. Monta o payload substituindo as variáveis dinâmicas do template ativo
     const payload = {
       bookings: targetBookings.map((b) => {
         const [dia, mes, ano] = b.dateSchedule.split('/');
@@ -43,7 +48,8 @@ export async function triggerN8nConfirmationsAction(dateSchedule: string) {
         const doctorNameFmt = toTitleCase(b.doctorName);
         const timeFmt = b.hourSchedule.substring(0, 5);
 
-        let finalMessage = template
+        // Aplica o template dinâmico processado pelo servidor
+        let finalMessage = templateContent
           .replace(/{{patientName}}/g, patientNameFmt)
           .replace(/{{doctor}}/g, doctorNameFmt)
           .replace(/{{date}}/g, b.dateSchedule)

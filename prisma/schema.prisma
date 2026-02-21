@@ -83,3 +83,12 @@ model Config {
   messageTemplate String   @db.Text
   updatedAt       DateTime @updatedAt
 }
+
+model MessageTemplate {
+  id        String   @id @default(cuid())
+  name      String   // Ex: "Lembrete Padrão", "Feriado"
+  content   String   @db.Text
+  isActive  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
