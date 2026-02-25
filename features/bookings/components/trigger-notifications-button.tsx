@@ -2,16 +2,18 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { triggerN8nConfirmationsAction } from "@/actions/notification.action";
+// Adicionamos a importação da nova action que você vai criar na próxima etapa
+import { triggerN8nConfirmationsAction, retryN8nErrorsAction } from "@/actions/notification.action"; 
 import { Button } from "@/components/ui/button";
-import { Send, Loader2 } from "lucide-react";
+import { Send, Loader2, RefreshCcw } from "lucide-react";
 
 interface TriggerNotificationsButtonProps {
   date: string;
   pendingCount: number;
+  errorCount: number; // <-- Nova prop para contabilizar os erros
 }
 
-export function TriggerNotificationsButton({ date, pendingCount }: TriggerNotificationsButtonProps) {
+export function TriggerNotificationsButton({ date, pendingCount, errorCount }: TriggerNotificationsButtonProps) {
   const [isPending, startTransition] = useTransition();
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
@@ -28,27 +30,59 @@ export function TriggerNotificationsButton({ date, pendingCount }: TriggerNotifi
     });
   };
 
+  const handleRetryErrors = () => {
+    setFeedback(null);
+    startTransition(async () => {
+      const result = await retryN8nErrorsAction(date);
+      if (result.success) {
+        setFeedback({ type: "success", message: `${result.count} reenviados.` });
+        setTimeout(() => setFeedback(null), 5000);
+      } else {
+        setFeedback({ type: "error", message: result.error ?? "Erro ao reenviar." });
+      }
+    });
+  };
+
   const hasItems = pendingCount > 0;
+  const hasErrors = errorCount > 0;
 
   return (
     <div className="flex flex-col items-center xl:items-end gap-1.5 relative w-full xl:w-auto">
-      <Button 
-        onClick={handleTrigger} 
-        disabled={isPending || !hasItems}
-        className={`w-full xl:w-auto h-9 rounded-xl px-4 transition-all duration-300 text-xs font-bold shadow-sm
-          ${hasItems 
-            ? "bg-gradient-to-r from-primary to-primary/80 hover:shadow-md hover:shadow-primary/20 text-white" 
-            : "bg-slate-100 text-slate-400 cursor-not-allowed shadow-none"
-          }
-        `}
-      >
-        {isPending ? (
-          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-        ) : (
-          <Send className={`mr-1.5 h-3.5 w-3.5 ${hasItems ? "animate-bounce" : ""}`} />
+      <div className="flex gap-2 w-full xl:w-auto">
+        <Button 
+          onClick={handleTrigger} 
+          disabled={isPending || !hasItems}
+          className={`flex-1 xl:w-auto h-9 rounded-xl px-4 transition-all duration-300 text-xs font-bold shadow-sm
+            ${hasItems 
+              ? "bg-gradient-to-r from-primary to-primary/80 hover:shadow-md hover:shadow-primary/20 text-white" 
+              : "bg-slate-100 text-slate-400 cursor-not-allowed shadow-none"
+            }
+          `}
+        >
+          {isPending && !hasErrors ? (
+            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Send className={`mr-1.5 h-3.5 w-3.5 ${hasItems ? "animate-bounce" : ""}`} />
+          )}
+          Disparar ({pendingCount})
+        </Button>
+
+        {hasErrors && (
+          <Button 
+            variant="outline"
+            onClick={handleRetryErrors} 
+            disabled={isPending}
+            className="flex-1 xl:w-auto h-9 rounded-xl px-4 transition-all duration-300 text-xs font-bold border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground shadow-sm"
+          >
+            {isPending ? (
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCcw className="mr-1.5 h-3.5 w-3.5" />
+            )}
+            Reenviar Erros ({errorCount})
+          </Button>
         )}
-        Disparar ({pendingCount})
-      </Button>
+      </div>
       
       {feedback && (
         <div className={`xl:absolute xl:-bottom-6 right-0 text-[9px] uppercase tracking-widest font-bold px-1.5 py-0.5 rounded ${feedback.type === "success" ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>

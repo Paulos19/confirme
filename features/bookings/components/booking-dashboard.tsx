@@ -96,9 +96,10 @@ export function BookingDashboard({ initialBookings, initialDate = "2026-02-19" }
                   <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
                     booking.confirmationStatus === 'PENDING' ? 'bg-yellow-100 text-yellow-800' :
                     booking.confirmationStatus === 'CONFIRMED' ? 'bg-green-100 text-green-800' :
+                    booking.confirmationStatus === 'ERROR' ? 'bg-destructive/15 text-destructive font-bold border border-destructive/30' : 
                     'bg-red-100 text-red-800'
                   }`}>
-                    {booking.confirmationStatus}
+                    {booking.confirmationStatus === 'ERROR' ? 'ERRO DE ENVIO' : booking.confirmationStatus}
                   </span>
                 </TableCell>
               </TableRow>

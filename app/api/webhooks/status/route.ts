@@ -8,7 +8,7 @@ import { revalidatePath } from "next/cache";
 // Contrato estrito para o que aceitamos do n8n
 const webhookSchema = z.object({
   phone: z.string().min(10, "Telefone inválido"),
-  status: z.enum(["CONFIRMED", "CANCELLED"]),
+  status: z.enum(["CONFIRMED", "CANCELLED", "ERROR"]), // <-- "ERROR" Adicionado aqui
 });
 
 export async function POST(req: Request) {

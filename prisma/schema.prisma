@@ -76,6 +76,7 @@ enum ConfirmationStatus {
   PENDING
   CONFIRMED
   CANCELLED
+  ERROR
 }
 
 model Config {
