@@ -10,29 +10,56 @@ const toTitleCase = (str: string) => {
   return str.toLowerCase().replace(/(?:^|\s)\w/g, match => match.toUpperCase());
 };
 
-export async function triggerN8nConfirmationsAction(dateSchedule: string) {
+export async function triggerN8nConfirmationsAction(
+  dateSchedule: string,
+  options?: {
+    targetMode?: "ALL" | "CONFIRMED" | "PENDING" | "INDIVIDUAL";
+    selectedIds?: string[];
+    templateId?: string | null;
+  }
+) {
   try {
+    const mode = options?.targetMode || "ALL";
+
     // 1. REGRA DE NEGÓCIO: Busca os alvos válidos.
     // Permite múltiplos disparos (n8nNotifiedAt não é restritivo).
     // Barreira Absoluta: NUNCA enviar para "CANCELLED".
+    let whereClause: any = {
+      dateSchedule: dateSchedule,
+      confirmationStatus: { not: "CANCELLED" },
+    };
+
+    if (mode === "CONFIRMED") {
+      whereClause.confirmationStatus = "CONFIRMED";
+    } else if (mode === "PENDING") {
+      whereClause.confirmationStatus = "PENDING";
+    } else if (mode === "INDIVIDUAL" && options?.selectedIds?.length) {
+      whereClause.id = { in: options.selectedIds };
+    }
+
     const targetBookings = await prisma.booking.findMany({
-      where: {
-        dateSchedule: dateSchedule,
-        confirmationStatus: {
-          not: "CANCELLED", // Regra de ouro aplicada
-        }
-      }
+      where: whereClause
     });
 
     if (targetBookings.length === 0) {
-      return { success: false, error: "Nenhum paciente elegível para notificação nesta data." };
+      return { success: false, error: "Nenhum paciente elegível para notificação encontrado com os filtros atuais." };
     }
 
-    // 2. Busca o Template ATIVO no Banco (NOVA ESTRUTURA DE TEMPLATES)
-    const activeTemplate = await prisma.messageTemplate.findFirst({ 
-      where: { isActive: true } 
-    });
-    
+    // 2. Busca o Template no Banco
+    let activeTemplate = null;
+
+    if (options?.templateId) {
+      activeTemplate = await prisma.messageTemplate.findUnique({
+        where: { id: options.templateId }
+      });
+    }
+
+    if (!activeTemplate) {
+      activeTemplate = await prisma.messageTemplate.findFirst({
+        where: { isActive: true }
+      });
+    }
+
     // Fallback de segurança caso o admin tenha apagado tudo ou não ativado nenhum
     const templateContent = activeTemplate?.content || "Você tem uma consulta dia {{date}} às {{time}}.";
 
@@ -42,7 +69,7 @@ export async function triggerN8nConfirmationsAction(dateSchedule: string) {
         const [dia, mes, ano] = b.dateSchedule.split('/');
         const dateObj = new Date(`${ano}-${mes}-${dia}T12:00:00`);
         const diasDaSemana = ["DOMINGO", "SEGUNDA", "TERÇA", "QUARTA", "QUINTA", "SEXTA", "SÁBADO"];
-        
+
         const diaSemanaStr = diasDaSemana[dateObj.getDay()];
         const dataCurta = `${dia}/${mes}`;
         const patientNameFmt = toTitleCase(b.patientName);
@@ -61,7 +88,7 @@ export async function triggerN8nConfirmationsAction(dateSchedule: string) {
         return {
           id: b.id,
           patientMobile: b.patientMobile,
-          customMessage: finalMessage 
+          customMessage: finalMessage
         };
       }),
     };
@@ -113,10 +140,10 @@ export async function retryN8nErrorsAction(dateSchedule: string) {
     }
 
     // 2. Busca o Template ATIVO no Banco
-    const activeTemplate = await prisma.messageTemplate.findFirst({ 
-      where: { isActive: true } 
+    const activeTemplate = await prisma.messageTemplate.findFirst({
+      where: { isActive: true }
     });
-    
+
     const templateContent = activeTemplate?.content || "Você tem uma consulta dia {{date}} às {{time}}.";
 
     // 3. Monta o payload substituindo as variáveis dinâmicas (idêntico ao original)
@@ -125,7 +152,7 @@ export async function retryN8nErrorsAction(dateSchedule: string) {
         const [dia, mes, ano] = b.dateSchedule.split('/');
         const dateObj = new Date(`${ano}-${mes}-${dia}T12:00:00`);
         const diasDaSemana = ["DOMINGO", "SEGUNDA", "TERÇA", "QUARTA", "QUINTA", "SEXTA", "SÁBADO"];
-        
+
         const diaSemanaStr = diasDaSemana[dateObj.getDay()];
         const dataCurta = `${dia}/${mes}`;
         const patientNameFmt = toTitleCase(b.patientName);
@@ -143,7 +170,7 @@ export async function retryN8nErrorsAction(dateSchedule: string) {
         return {
           id: b.id,
           patientMobile: b.patientMobile,
-          customMessage: finalMessage 
+          customMessage: finalMessage
         };
       }),
     };
@@ -166,9 +193,9 @@ export async function retryN8nErrorsAction(dateSchedule: string) {
     // e atualiza a data de notificação para registrar a nova tentativa.
     await prisma.booking.updateMany({
       where: { id: { in: errorBookings.map(b => b.id) } },
-      data: { 
+      data: {
         confirmationStatus: "PENDING",
-        n8nNotifiedAt: new Date() 
+        n8nNotifiedAt: new Date()
       },
     });
 
